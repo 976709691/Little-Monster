@@ -19,8 +19,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # GitHub runner 自带 Android SDK；这里只确保目标组件就位（已预装则忽略），
+      # 其余缺失组件由 AGP 在构建时自动补装。
+      - name: Ensure Android SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
 
       - name: Build debug APK & run unit tests
         run: ./gradlew assembleDebug testDebugUnitTest
