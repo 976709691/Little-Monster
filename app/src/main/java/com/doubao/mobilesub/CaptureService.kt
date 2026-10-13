@@ -45,6 +45,10 @@ class CaptureService : Service() {
     private val segmenter = Segmenter(16000)
     private var lastTrans = ""
     private var lastOrig = ""
+    private var translating = false
+    private var langTag = ""
+    private var appliedFont = 0
+    private var appliedAlpha = -1
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -72,6 +76,9 @@ class CaptureService : Service() {
         val cfg = AppConfig.load(this)
         overlay = SubtitleOverlay(this)
         overlay?.show()
+        appliedFont = cfg.fontSizeSp
+        appliedAlpha = cfg.bgAlpha
+        overlay?.applyStyle(cfg.fontSizeSp, cfg.bgAlpha)
 
         whisper = WhisperEngine(this, cfg) { text ->
             trExec.execute {
@@ -82,14 +89,16 @@ class CaptureService : Service() {
         val err = whisper?.init()
         if (err != null) {
             Log.e(TAG, "model init failed: $err")
-            overlay?.update("", "模型加载失败：$err")
+            overlay?.update("", "模型加载失败：$err", "", false, true)
             stopEverything()
             return START_NOT_STICKY
         }
         translator = Translator(cfg)
+        translating = cfg.engine == "llm" && cfg.apiKey.isNotBlank() && cfg.targetLang != "不翻译"
+        langTag = if (translating) "${AppConfig.srcLangLabel(cfg.language)}→${cfg.targetLang}" else ""
 
         if (!startCapture()) {
-            overlay?.update("", "音频捕获启动失败，请检查系统权限")
+            overlay?.update("", "音频捕获启动失败，请检查系统权限", "", false, true)
             stopEverything()
             return START_NOT_STICKY
         }
@@ -171,7 +180,13 @@ class CaptureService : Service() {
         if (orig == lastOrig && trans == lastTrans) return
         lastOrig = orig
         lastTrans = trans
-        overlay?.update(orig, trans)
+        val cfg = AppConfig.load(this)
+        if (cfg.fontSizeSp != appliedFont || cfg.bgAlpha != appliedAlpha) {
+            appliedFont = cfg.fontSizeSp
+            appliedAlpha = cfg.bgAlpha
+            overlay?.applyStyle(cfg.fontSizeSp, cfg.bgAlpha)
+        }
+        overlay?.update(orig, trans, langTag, translating, cfg.showBilingual)
     }
 
     private fun stopEverything() {

@@ -8,12 +8,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 翻译器：dummy 模式直通原文（调试用）；llm 模式调用 OpenAI 兼容接口。
+ * 翻译器：dummy 模式或"字幕翻译=不翻译"时直通原文；llm 模式调用 OpenAI 兼容接口翻译成目标语言。
  */
 class Translator(private val cfg: AppConfig) {
 
     fun translate(text: String): String {
         if (cfg.engine != "llm" || cfg.apiKey.isBlank()) return text
+        if (cfg.targetLang == "不翻译") return text
+        val target = cfg.targetLang.ifBlank { "简体中文" }
         return try {
             val url = URL(cfg.baseUrl.trimEnd('/') + "/chat/completions")
             val conn = url.openConnection() as HttpURLConnection
@@ -23,7 +25,7 @@ class Translator(private val cfg: AppConfig) {
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("Authorization", "Bearer ${cfg.apiKey}")
-            val system = "你是影视同声传译字幕助手。请把用户发送的台词翻译成简体中文，输出自然简洁、适合作为字幕，只输出译文，不要解释、不要引号、不要编号。"
+            val system = "你是影视同声传译字幕助手。请把用户发送的台词翻译成$target，输出自然简洁、适合作为字幕，只输出译文，不要解释、不要引号、不要编号。"
             val body = JSONObject()
                 .put("model", cfg.llmModel)
                 .put("temperature", 0.1)
